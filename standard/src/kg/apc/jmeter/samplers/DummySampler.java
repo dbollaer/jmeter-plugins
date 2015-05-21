@@ -20,6 +20,7 @@ public class DummySampler
     @Override
     public SampleResult sample(Entry e) {
 
+
         SampleResult res;
         if (isSimulateWaiting()) {
             res = new SampleResult();
@@ -50,6 +51,36 @@ public class DummySampler
         res.setLatency(getLatency());
 
         return res;
+    }
+
+    public void convert(final SampleResult input){
+        
+
+        setName("Dummy:" + input.getSampleLabel());
+      
+        setRequestData(input.getSamplerData());
+        
+        // source data
+      //  res.setSamplerData(input.getSamplerData());
+    
+        // response code
+        setResponseCode(input.getResponseCode());
+        
+      //  res.setResponseCode(input.getResponseCode());
+      //  res.setResponseMessage(input.getResponseMessage());
+        setResponseMessage(input.getSamplerData());
+        //  res.setSuccessful(input.isSuccessful());
+        setSuccessful(input.isSuccessful());
+        //res.setRequestHeaders(input.getRequestHeaders());
+        // responde data
+        
+       // res.setDataType(SampleResult.TEXT);
+        setRequestData(input.getResponseDataAsString());
+        //res.setResponseData(input.getResponseData());
+        //setLatency(((String) input.getLatency()));
+        //res.setLatency(input.getLatency());
+
+     
     }
 
     public void setSuccessful(boolean selected) {
