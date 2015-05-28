@@ -22,6 +22,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.prefs.Preferences;
 
+import kg.apc.jmeter.assertions.DiffAssertion;
+import kg.apc.jmeter.assertions.DiffAssertionGui;
+import kg.apc.jmeter.regex.RegexExtractor;
+import kg.apc.jmeter.regex.RegexExtractorGui;
 import kg.apc.jmeter.samplers.DummySampler;
 import kg.apc.jmeter.samplers.DummySamplerGui;
 import org.apache.commons.codec.binary.Base64;
@@ -30,8 +34,6 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.http.conn.ssl.AbstractVerifier;
-import org.apache.jmeter.assertions.ResponseAssertion;
-import org.apache.jmeter.assertions.gui.AssertionGui;
 import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.config.ConfigTestElement;
@@ -52,7 +54,7 @@ import org.apache.jmeter.protocol.http.control.HeaderManager;
 import org.apache.jmeter.protocol.http.control.RecordingController;
 import org.apache.jmeter.protocol.http.gui.AuthPanel;
 import org.apache.jmeter.protocol.http.gui.HeaderPanel;
-import org.apache.jmeter.protocol.http.proxy.Daemon;
+
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerFactory;
@@ -87,14 +89,14 @@ import org.apache.oro.text.regex.Perl5Compiler;
 /**
  * Created by dbollaer on 5/20/15.
  */
-public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyControl{
+public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.ProxyControl{
 
 
     private static final Logger log = LoggingManager.getLoggerForClass();
 
     private static final long serialVersionUID = 240L;
 
-    private static final String ASSERTION_GUI = AssertionGui.class.getName();
+    private static final String ASSERTION_GUI = DiffAssertionGui.class.getName();
 
     private static final String DUMMY_SAMPLER_GUI = DummySamplerGui.class.getName();
 
@@ -189,7 +191,7 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
     // Keys for user preferences
     private static final String USER_PASSWORD_KEY = "proxy_cert_password";
 
-    private static final Preferences PREFERENCES = Preferences.userNodeForPackage(ProxyControl.class);
+    private static final Preferences PREFERENCES = Preferences.userNodeForPackage(ProxyControlDummy.class);
     // Note: Windows user preferences are stored relative to: HKEY_CURRENT_USER\Software\JavaSoft\Prefs
 
     // Whether to use dymanic key generation (if supported)
@@ -204,18 +206,18 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
     static final String CERT_ALIAS = JMeterUtils.getProperty("proxy.cert.alias"); // $NON-NLS-1$
 
 
-    static final KeystoreMode KEYSTORE_MODE;
+    public static final KeystoreMode KEYSTORE_MODE;
 
     static {
         if (CERT_ALIAS != null) {
             KEYSTORE_MODE = KeystoreMode.USER_KEYSTORE;
-            log.info("HTTP(S) Test Script Recorder will use the keystore '"+ CERT_PATH_ABS + "' with the alias: '" + CERT_ALIAS + "'");
+            log.warn("HTTP(S) Test Script Recorder will use the keystore '" + CERT_PATH_ABS + "' with the alias: '" + CERT_ALIAS + "'");
         } else {
             if (!KeyToolUtils.haveKeytool()) {
                 KEYSTORE_MODE = KeystoreMode.NONE;
             } else if (KeyToolUtils.SUPPORTS_HOST_CERT && USE_DYNAMIC_KEYS) {
                 KEYSTORE_MODE = KeystoreMode.DYNAMIC_KEYSTORE;
-                log.info("HTTP(S) Test Script Recorder SSL Proxy will use keys that support embedded 3rd party resources in file " + CERT_PATH_ABS);
+                log.warn("HTTP(S) Test Script Recorder SSL Proxy will use keys that support embedded 3rd party resources in file " + CERT_PATH_ABS);
             } else {
                 KEYSTORE_MODE = KeystoreMode.JMETER_KEYSTORE;
                 log.warn("HTTP(S) Test Script Recorder SSL Proxy will use keys that may not work for embedded resources in file " + CERT_PATH_ABS);
@@ -267,8 +269,10 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
     private String storePassword;
 
     private String keyPassword;
+    private DummySampler dummySampler;
+    private HTTPSamplerBase sampler;
 
-    public ProxyControl() {
+    public ProxyControlDummy() {
         setPort(DEFAULT_PORT);
         setExcludeList(new HashSet<String>());
         setIncludeList(new HashSet<String>());
@@ -513,7 +517,9 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
      */
     public synchronized void deliverSampler(final HTTPSamplerBase sampler, final TestElement[] subConfigs, final SampleResult result) {
         boolean notifySampleListeners = true;
-        DummySampler dummySampler = new DummySampler();
+        boolean setDummy = false;
+        boolean setReal = true;
+        dummySampler = new DummySampler();
         dummySampler.setProperty(TestElement.GUI_CLASS, DUMMY_SAMPLER_GUI);
         if (sampler != null) {
             if (ATTEMPT_REDIRECT_DISABLING && (samplerRedirectAutomatically || samplerFollowRedirects)) {
@@ -525,8 +531,11 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
                         dummySampler.setComment("Detected a redirect from the previous sample");
                         sampler.setEnabled(false);
                         sampler.setComment("Detected a redirect from the previous sample");
+                        setDummy = true;
+                        setReal = false;
                     } else { // this is not the result of a redirect
                         LAST_REDIRECT = null; // so break the chain
+
                     }
                     if (httpSampleResult.isRedirect()) { // Save Location so resulting sample can be disabled
                         if (LAST_REDIRECT == null) {
@@ -534,6 +543,7 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
                         }
                         LAST_REDIRECT = httpSampleResult.getRedirectLocation();
                     } else {
+                        setDummy = true;
                         LAST_REDIRECT = null;
                     }
                 }
@@ -544,6 +554,9 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
                         Collection<ConfigTestElement> defaultConfigurations = (Collection<ConfigTestElement>) findApplicableElements(myTarget, ConfigTestElement.class, false);
                 @SuppressWarnings("unchecked") // OK, because find only returns correct element types
                         Collection<Arguments> userDefinedVariables = (Collection<Arguments>) findApplicableElements(myTarget, Arguments.class, true);
+
+                Collection<RegexExtractor> regexExtractors = (Collection<RegexExtractor>) findApplicableElements(myTarget, RegexExtractor.class, true);
+                log.warn("found regexeExtractors: " + regexExtractors.size());
 
                 removeValuesFromSampler(sampler, defaultConfigurations);
                 replaceValues(sampler, subConfigs, userDefinedVariables);
@@ -559,10 +572,21 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
 
                 ViewResultsFullVisualizer.getResponseAsString(result);
 
+                if(setReal){
+                    this.sampler = sampler;
 
-                placeSampler(sampler, subConfigs, myTarget);
-                dummySampler.convert(result);
-                placeSampler(dummySampler, subConfigs, myTarget);
+                }
+                if(setDummy){
+
+
+                    placeSampler(this.sampler, subConfigs, myTarget, result, regexExtractors);
+                   // dummySampler.convert(result);
+                  //  placeSampler(dummySampler, subConfigs, myTarget, null);
+                }
+
+
+
+
             } else {
                 if(log.isDebugEnabled()) {
                     log.debug("Sample excluded based on url or content-type: " + result.getUrlAsString() + " - " + result.getContentType());
@@ -578,6 +602,8 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
             log.debug("Sample not delivered to Child Sampler Listener based on url or content-type: " + result.getUrlAsString() + " - " + result.getContentType());
         }
     }
+
+
 
 
 
@@ -805,12 +831,28 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
      * Helper method to add a Response Assertion
      * Called from AWT Event thread
      */
-    private void addAssertion(JMeterTreeModel model, JMeterTreeNode node) throws IllegalUserActionException {
-        ResponseAssertion ra = new ResponseAssertion();
+    private void addAssertion(JMeterTreeModel model, JMeterTreeNode node, SampleResult result) throws IllegalUserActionException {
+        DiffAssertion ra = new DiffAssertion();
+
         ra.setProperty(TestElement.GUI_CLASS, ASSERTION_GUI);
         ra.setName(JMeterUtils.getResString("assertion_title")); // $NON-NLS-1$
         ra.setTestFieldResponseData();
+        ra.addTestString(result.getResponseDataAsString());
         model.addComponent(ra, node);
+    }
+
+    /**
+     * Helper method to add a Response Assertion
+     * Called from AWT Event thread
+     */
+    private void addRegex(JMeterTreeModel model, JMeterTreeNode node, SampleResult result, Collection<RegexExtractor> regexExtractors ) throws IllegalUserActionException {
+        for (RegexExtractor regexExtractor : regexExtractors) {
+            if(regexExtractor.findMatches(result)){
+                log.warn("found match: " + regexExtractor.getName());
+                regexExtractor.setProperty(TestElement.GUI_CLASS, RegexExtractorGui.class.getName());
+                model.addComponent(regexExtractor,node);
+            }
+        }
     }
 
     /**
@@ -1084,7 +1126,7 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
     }
 
     private void placeSampler(final AbstractSampler sampler, final TestElement[] subConfigs,
-                              JMeterTreeNode myTarget) {
+                              JMeterTreeNode myTarget, final SampleResult result, final Collection<RegexExtractor> regexExtractors) {
         try {
             final JMeterTreeModel treeModel = GuiPackage.getInstance().getTreeModel();
 
@@ -1146,7 +1188,9 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
                         final JMeterTreeNode newNode = treeModel.addComponent(sampler, myTargetFinal);
                         if (firstInBatchFinal) {
                             if (addAssertions) {
-                                addAssertion(treeModel, newNode);
+
+                                addAssertion(treeModel, newNode, result);
+                                addRegex(treeModel,newNode,result,regexExtractors);
                             }
                             addTimers(treeModel, newNode, deltaTFinal);
                         }
@@ -1491,7 +1535,7 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
         }
     }
 
-    private KeyStore getKeyStore(char[] password) throws GeneralSecurityException, IOException {
+    public KeyStore getKeyStore(char[] password) throws GeneralSecurityException, IOException {
         InputStream in = null;
         try {
             in = new BufferedInputStream(new FileInputStream(CERT_PATH));
@@ -1514,11 +1558,13 @@ public class ProxyControl extends org.apache.jmeter.protocol.http.proxy.ProxyCon
     }
 
     // the keystore for use by the Proxy
-    KeyStore getKeyStore() {
+
+    public KeyStore getKeyStore() {
+        log.warn("dummy used!");
         return keyStore;
     }
 
-    String getKeyPassword() {
+    public String getKeyPassword() {
         return keyPassword;
     }
 

@@ -106,7 +106,7 @@ public class ProxyControlGui extends org.apache.jmeter.protocol.http.proxy.gui.P
     }
 
     protected ProxyControl makeProxyControl() {
-        ProxyControl local = new ProxyControl();
+        ProxyControl local = new ProxyControlDummy();
         return local;
     }
 

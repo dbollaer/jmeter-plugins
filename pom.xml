@@ -53,6 +53,7 @@
             <id>cloudera repository</id>
             <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
         </repository>
+
     </repositories>
 
     <modules>
