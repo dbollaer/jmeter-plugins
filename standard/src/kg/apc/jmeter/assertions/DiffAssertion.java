@@ -258,21 +258,22 @@ public class DiffAssertion extends AbstractScopedAssertion implements Serializab
                     if(contains || matches) {
                         pattern = JMeterUtils.getPatternCache().getPattern(stringPattern, '耀');
                     }
+                    int toCheckInt = toCheck.length();
+                    int stringPatternInt = stringPattern.length();
+                    if(toCheckInt == 0){
+                        toCheckInt =1;
+                    }
+                    if(stringPatternInt == 0){
+                        stringPatternInt =1;
+                    }
+                    Double matchLength = (double) toCheckInt/ (double) stringPatternInt;
 
-                    boolean found;
-                    if(contains) {
-
-                        StringUtils.difference(toCheck,stringPattern);
-                        found = e.contains(toCheck, pattern);
-                    } else if(equals) {
-                        found = toCheck.equals(stringPattern);
-                    } else if(substring) {
-                        found = toCheck.indexOf(stringPattern) != -1;
-                    } else {
-                        found = e.matches(toCheck, pattern);
+                    if(matchLength >= 0.9  || matchLength >= 1.1){
+                        pass = true;
+                    }else{
+                        pass = false;
                     }
 
-                    pass = notTest1?!found:found;
                     if(!pass) {
                         if(debugEnabled) {
                             log.debug("Failed: " + stringPattern);

@@ -20,6 +20,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.prefs.Preferences;
 
 import kg.apc.jmeter.assertions.DiffAssertion;
@@ -207,6 +208,8 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
 
 
     public static final KeystoreMode KEYSTORE_MODE;
+
+    private static final ConcurrentHashMap<String,String> foundMatches = new ConcurrentHashMap<String, String>();
 
     static {
         if (CERT_ALIAS != null) {

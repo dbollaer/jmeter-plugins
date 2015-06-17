@@ -18,10 +18,8 @@ import org.apache.oro.text.regex.PatternMatcherInput;
 import org.apache.oro.text.regex.Perl5Matcher;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by dbollaer on 5/27/15.
@@ -45,6 +43,13 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
     private static final String TEMPLATE = "RegexExtractor.template";
     private static final String REF_MATCH_NR = "_matchNr";
     private static final String UNDERSCORE = "_";
+    private static final String REGEX_REF = "RegexExtractor.regex_ref";
+
+    public String getFoundMatch() {
+        return foundMatch;
+    }
+
+    private String foundMatch = "";
     private transient List<Object> template;
 
     public RegexExtractor() {
@@ -71,6 +76,71 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
                 List e = this.processMatchesGlobal(pattern, regex, previousResult, matchNumber);
                 foundMatches = !(e.isEmpty());
 
+
+            } catch (MalformedCachePatternException var24) {
+                log.error("Error in pattern: " + regex);
+            } finally {
+                JMeterUtils.clearMatcherMemory(matcher, pattern);
+            }
+
+        }
+        return foundMatches;
+    }
+
+
+    public ConcurrentHashMap<String,String> findMatches2(SampleResult previousResult){
+        // this.initTemplate();
+
+        ConcurrentHashMap<String,String> foundMatches = new ConcurrentHashMap<String,String>();
+
+        if(previousResult != null) {
+            log.debug("RegexExtractor processing result");
+
+            String refName = this.getRefName();
+            int matchNumber = this.getMatchNumber();
+            String defaultValue = this.getDefaultValue();
+
+
+            Perl5Matcher matcher = JMeterUtils.getMatcher();
+            String regex = this.getRegex();
+            Pattern pattern = null;
+
+            try {
+                pattern = JMeterUtils.getPatternCache().getPattern(regex, '耀');
+                List e = this.processMatchesGlobal(pattern, regex, previousResult, matchNumber);
+
+                int matchCount = 0;
+
+                try {
+                    MatchResult e1;
+                    int i;
+                    String refName_n;
+                    if(matchNumber >= 0) {
+                        e1 = this.getCorrectMatch(e, matchNumber);
+                        if(e1 != null) {
+                            foundMatches.put(refName, this.generateResult(e1));
+
+
+
+                        }
+                    } else {
+
+                        matchCount = e.size();
+
+
+                        for(i = 1; i <= matchCount; ++i) {
+                            e1 = this.getCorrectMatch(e, i);
+                            if(e1 != null) {
+                                refName_n = refName + "_" + i;
+                                foundMatches.put(refName_n, this.generateResult(e1));
+
+                            }
+                        }
+                    }
+
+                } catch (RuntimeException var23) {
+                    log.warn("Error while generating result");
+                }
 
             } catch (MalformedCachePatternException var24) {
                 log.error("Error in pattern: " + regex);
@@ -365,6 +435,14 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
     private MatchResult getCorrectMatch(List<MatchResult> matches, int entry) {
         int matchSize = matches.size();
         return matchSize > 0 && entry <= matchSize?(entry == 0?(MatchResult)matches.get(JMeterUtils.getRandomInt(matchSize)):(MatchResult)matches.get(entry - 1)):null;
+    }
+
+    public void setRegexRef(String regexRef) {
+        this.setProperty("RegexExtractor.regex_ref", regexRef);
+    }
+
+    public String getRegexRef() {
+        return this.getPropertyAsString("RegexExtractor.regex_ref");
     }
 
     public void setRegex(String regex) {

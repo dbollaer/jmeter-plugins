@@ -26,6 +26,7 @@ public class RegexExtractorGui extends org.apache.jmeter.extractor.gui.RegexExtr
     private JLabeledTextField defaultField;
     private JLabeledTextField matchNumberField;
     private JLabeledTextField refNameField;
+    private JLabeledTextField regexReplaceNameField;
     private JRadioButton useBody;
     private JRadioButton useUnescapedBody;
     private JRadioButton useBodyAsDocument;
@@ -60,6 +61,7 @@ public class RegexExtractorGui extends org.apache.jmeter.extractor.gui.RegexExtr
             this.defaultField.setText(re.getDefaultValue());
             this.matchNumberField.setText(re.getMatchNumberAsString());
             this.refNameField.setText(re.getRefName());
+            this.regexReplaceNameField.setText(re.getRegexRef());
         }
 
     }
@@ -81,6 +83,7 @@ public class RegexExtractorGui extends org.apache.jmeter.extractor.gui.RegexExtr
             regex.setTemplate(this.templateField.getText());
             regex.setDefaultValue(this.defaultField.getText());
             regex.setMatchNumber(this.matchNumberField.getText());
+            regex.setRegexRef(this.regexReplaceNameField.getText());
         }
 
     }
@@ -93,6 +96,7 @@ public class RegexExtractorGui extends org.apache.jmeter.extractor.gui.RegexExtr
         this.defaultField.setText("");
         this.refNameField.setText("");
         this.matchNumberField.setText("");
+        this.regexReplaceNameField.setText("");
     }
 
     private void init() {
@@ -148,6 +152,7 @@ public class RegexExtractorGui extends org.apache.jmeter.extractor.gui.RegexExtr
         this.defaultField = new JLabeledTextField(JMeterUtils.getResString("default_value_field"));
         this.refNameField = new JLabeledTextField(JMeterUtils.getResString("ref_name_field"));
         this.matchNumberField = new JLabeledTextField(JMeterUtils.getResString("match_num_field"));
+        this.regexReplaceNameField = new JLabeledTextField("regex ref");
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         this.initConstraints(gbc);
@@ -161,6 +166,8 @@ public class RegexExtractorGui extends org.apache.jmeter.extractor.gui.RegexExtr
         this.resetContraints(gbc);
         gbc.weighty = 1.0D;
         this.addField(panel, this.defaultField, gbc);
+        this.resetContraints(gbc);
+        this.addField(panel, this.regexReplaceNameField, gbc);
         return panel;
     }
 
