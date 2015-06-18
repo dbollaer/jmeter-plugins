@@ -7,19 +7,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
+import java.net.URLEncoder;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.prefs.Preferences;
 
@@ -35,6 +28,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.http.conn.ssl.AbstractVerifier;
+import org.apache.jmeter.config.Argument;
 import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.config.ConfigTestElement;
@@ -56,6 +50,7 @@ import org.apache.jmeter.protocol.http.control.RecordingController;
 import org.apache.jmeter.protocol.http.gui.AuthPanel;
 import org.apache.jmeter.protocol.http.gui.HeaderPanel;
 
+import org.apache.jmeter.protocol.http.parser.HtmlParsingUtils;
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerFactory;
@@ -563,6 +558,7 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
 
                 removeValuesFromSampler(sampler, defaultConfigurations);
                 replaceValues(sampler, subConfigs, userDefinedVariables);
+                replaceValuesHashMap(sampler, foundMatches);
                 sampler.setAutoRedirects(samplerRedirectAutomatically);
                 sampler.setFollowRedirects(samplerFollowRedirects);
                 sampler.setUseKeepAlive(useKeepAlive);
@@ -850,13 +846,16 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
      */
     private void addRegex(JMeterTreeModel model, JMeterTreeNode node, SampleResult result, Collection<RegexExtractor> regexExtractors ) throws IllegalUserActionException {
         for (RegexExtractor regexExtractor : regexExtractors) {
+            ConcurrentHashMap<String,String> foundMatchesLocal = regexExtractor.findMatches2(result);
             if(regexExtractor.findMatches(result)){
                 log.warn("found match: " + regexExtractor.getName());
                 regexExtractor.setProperty(TestElement.GUI_CLASS, RegexExtractorGui.class.getName());
                 model.addComponent(regexExtractor,node);
+                foundMatches.putAll(foundMatchesLocal);
             }
         }
     }
+
 
     /**
      * Construct AuthManager
@@ -1183,6 +1182,7 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
             }
             final long deltaTFinal = deltaT;
             final boolean firstInBatchFinal = firstInBatch;
+            addRegexMap(treeModel, result, regexExtractors);
             final JMeterTreeNode myTargetFinal = myTarget;
             JMeterUtils.runSafe(new Runnable() {
                 @Override
@@ -1193,8 +1193,9 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
                             if (addAssertions) {
 
                                 addAssertion(treeModel, newNode, result);
-                                addRegex(treeModel,newNode,result,regexExtractors);
+
                             }
+                            addRegex(treeModel,newNode,result,regexExtractors);
                             addTimers(treeModel, newNode, deltaTFinal);
                         }
 
@@ -1212,6 +1213,46 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
             });
         } catch (Exception e) {
             JMeterUtils.reportErrorToUser(e.getMessage());
+        }
+    }
+
+
+    private void modifyArgument( Arguments args, String key, String value) {
+        /*
+         * if (log.isDebugEnabled()) { log.debug("Modifying argument: " + arg);
+         * }
+         *
+         */
+        List<Argument> possibleReplacements = new ArrayList<Argument>();
+        PropertyIterator iter = args.iterator();
+        Argument replacementArg;
+        while (iter.hasNext()) {
+            replacementArg = (Argument) iter.next().getObjectValue();
+
+            try {
+                log.warn("value found " + replacementArg.getValue());
+                log.warn("value I want to find" + value);
+                if( replacementArg.getValue().equals(value) ) {
+                    replacementArg.setValue("${" + key + "}");
+                    log.warn("replaced " + key );
+                }
+
+            } catch (Exception ex) {
+                log.error("Problem adding Argument", ex);
+            }
+        }
+
+
+    }
+
+    private void addRegexMap(JMeterTreeModel treeModel, SampleResult result, Collection<RegexExtractor> regexExtractors) {
+
+        for (RegexExtractor regexExtractor : regexExtractors) {
+            ConcurrentHashMap<String,String> foundMatchesLocal = regexExtractor.findMatches2(result);
+            if(foundMatchesLocal.size() > 0){
+                log.warn("adding matches: " + foundMatchesLocal.size());
+                foundMatches.putAll(foundMatchesLocal);
+            }
         }
     }
 
@@ -1234,6 +1275,7 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
             // There's a few properties which are excluded from this processing:
             if (name.equals(TestElement.ENABLED) || name.equals(TestElement.GUI_CLASS) || name.equals(TestElement.NAME)
                     || name.equals(TestElement.TEST_CLASS)) {
+
                 continue; // go on with next property.
             }
 
@@ -1322,6 +1364,43 @@ public class ProxyControlDummy extends org.apache.jmeter.protocol.http.proxy.Pro
             log.warn("Invalid variables included for replacement into recorded " + "sample", e);
         }
     }
+
+    private void replaceValuesHashMap(HTTPSamplerBase sampler, Map<String,String> map) {
+        // Build the replacer from all the variables in the collection:
+        ValueReplacer replacer = new ValueReplacer();
+        Map<String,String> urlEncoded = new HashMap<String, String>();
+        Arguments arguments = sampler.getArguments();
+
+
+            for (Iterator<String> vals = map.values().iterator(); vals.hasNext();){
+                final Object next = vals.next();
+
+                if ("".equals(next)) {// Drop any empty values (Bug 45199)
+
+                    vals.remove();
+
+                }
+
+            }
+            for(String key: map.keySet()){
+                modifyArgument(arguments,key, map.get(key));
+            }
+          //  replacer.addVariables(map);
+
+
+        try {
+            boolean cachedRegexpMatch = regexMatch;
+            replacer.reverseReplace(sampler, cachedRegexpMatch);
+
+        } catch (InvalidVariableException e) {
+            log.warn("Invalid variables included for replacement into recorded " + "sample", e);
+        }
+
+
+
+
+    }
+
 
     /**
      * This will notify sample listeners directly within the Proxy of the

@@ -18,6 +18,7 @@ import org.apache.oro.text.regex.PatternMatcherInput;
 import org.apache.oro.text.regex.Perl5Matcher;
 
 import java.io.Serializable;
+import java.net.URLEncoder;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -56,7 +57,7 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
     }
 
     public boolean findMatches(SampleResult previousResult){
-       // this.initTemplate();
+        this.initTemplate();
 
         boolean foundMatches = false;
         if(previousResult != null) {
@@ -90,7 +91,7 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
 
     public ConcurrentHashMap<String,String> findMatches2(SampleResult previousResult){
         // this.initTemplate();
-
+        this.initTemplate();
         ConcurrentHashMap<String,String> foundMatches = new ConcurrentHashMap<String,String>();
 
         if(previousResult != null) {
@@ -98,7 +99,6 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
 
             String refName = this.getRefName();
             int matchNumber = this.getMatchNumber();
-            String defaultValue = this.getDefaultValue();
 
 
             Perl5Matcher matcher = JMeterUtils.getMatcher();
@@ -115,11 +115,13 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
                     MatchResult e1;
                     int i;
                     String refName_n;
+                    String result;
                     if(matchNumber >= 0) {
                         e1 = this.getCorrectMatch(e, matchNumber);
                         if(e1 != null) {
-                            foundMatches.put(refName, this.generateResult(e1));
-
+                            result =  this.generateResult(e1);
+                            foundMatches.put(refName, result);
+                            foundMatches.put("__urlencode(${" + refName + "})" , URLEncoder.encode(result));
 
 
                         }
@@ -132,18 +134,20 @@ public class RegexExtractor  extends org.apache.jmeter.extractor.RegexExtractor 
                             e1 = this.getCorrectMatch(e, i);
                             if(e1 != null) {
                                 refName_n = refName + "_" + i;
-                                foundMatches.put(refName_n, this.generateResult(e1));
+                                result = this.generateResult(e1);
+                                foundMatches.put(refName_n, result);
+                                foundMatches.put("__urlencode(${" + refName_n + "})" , URLEncoder.encode(result));
 
                             }
                         }
                     }
 
                 } catch (RuntimeException var23) {
-                    log.warn("Error while generating result");
+                    log.warn("Error while generating result" + var23.getMessage());
                 }
 
             } catch (MalformedCachePatternException var24) {
-                log.error("Error in pattern: " + regex);
+                log.error("Error in pattern2: " + regex);
             } finally {
                 JMeterUtils.clearMatcherMemory(matcher, pattern);
             }
